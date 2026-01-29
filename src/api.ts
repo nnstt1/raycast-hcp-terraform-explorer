@@ -37,7 +37,34 @@ export async function getOrganizations(): Promise<Organization[]> {
   return response.data;
 }
 
-export async function getWorkspaces(
+// Get workspaces without details (fast, for initial display)
+export async function getWorkspacesBasic(
+  organizationName: string,
+  searchName?: string,
+  pageNumber = 1,
+  pageSize = 100,
+): Promise<{
+  workspaces: Workspace[];
+  totalCount: number;
+  hasNextPage: boolean;
+}> {
+  let endpoint = `/organizations/${organizationName}/workspaces?page[number]=${pageNumber}&page[size]=${pageSize}`;
+
+  if (searchName) {
+    endpoint += `&search[name]=${encodeURIComponent(searchName)}`;
+  }
+
+  const response = await fetchApi<TerraformApiResponse<Workspace[]>>(endpoint);
+
+  return {
+    workspaces: response.data,
+    totalCount: response.meta?.pagination?.["total-count"] ?? response.data.length,
+    hasNextPage: response.meta?.pagination?.["next-page"] !== null,
+  };
+}
+
+// Get workspaces with details (slower, includes run status and drift info)
+export async function getWorkspacesWithDetails(
   organizationName: string,
   searchName?: string,
   pageNumber = 1,

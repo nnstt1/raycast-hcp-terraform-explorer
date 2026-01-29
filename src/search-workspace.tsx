@@ -1,8 +1,8 @@
 import { Action, ActionPanel, Color, getPreferenceValues, Icon, List, showToast, Toast } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
-import { useState } from "react";
-import { getOrganizations, getWorkspaces, getWorkspaceUrl } from "./api";
-import { Preferences, WorkspaceWithDetails, RunStatus } from "./types";
+import { useMemo, useState } from "react";
+import { getOrganizations, getWorkspacesBasic, getWorkspacesWithDetails, getWorkspaceUrl } from "./api";
+import { Preferences, Workspace, WorkspaceWithDetails, RunStatus } from "./types";
 
 function getRunStatusColor(status?: RunStatus): Color {
   if (!status) return Color.SecondaryText;
@@ -111,9 +111,16 @@ function formatDate(dateString: string): string {
   });
 }
 
-type DriftStatus = "drifted" | "no-drift" | "unavailable";
+type DriftStatus = "drifted" | "no-drift" | "unavailable" | "loading";
 
-function getDriftStatus(workspace: WorkspaceWithDetails): DriftStatus {
+function isWorkspaceWithDetails(workspace: Workspace | WorkspaceWithDetails): workspace is WorkspaceWithDetails {
+  return "latestRun" in workspace || "currentAssessmentResult" in workspace;
+}
+
+function getDriftStatus(workspace: Workspace | WorkspaceWithDetails): DriftStatus {
+  // If workspace doesn't have details yet, show loading state
+  if (!isWorkspaceWithDetails(workspace)) return "loading";
+
   // Use Health Assessments API to detect drift
   const assessment = workspace.currentAssessmentResult;
 
@@ -142,15 +149,16 @@ export default function SearchWorkspace() {
     return await getOrganizations();
   });
 
+  // First fetch: Basic workspace info (fast, for immediate display)
   const {
-    data: workspaces,
-    isLoading: isLoadingWorkspaces,
-    error: workspacesError,
+    data: workspacesBasic,
+    isLoading: isLoadingBasic,
+    error: basicError,
     pagination,
   } = useCachedPromise(
     (org: string, search: string) => async (options: { page: number }) => {
       if (!org) return { data: [], hasMore: false };
-      const result = await getWorkspaces(org, search || undefined, options.page);
+      const result = await getWorkspacesBasic(org, search || undefined, options.page);
       return {
         data: result.workspaces,
         hasMore: result.hasNextPage,
@@ -161,6 +169,41 @@ export default function SearchWorkspace() {
       keepPreviousData: true,
     },
   );
+
+  // Second fetch: Detailed workspace info (slower, includes run status and drift)
+  const { data: workspacesDetailed, error: detailsError } = useCachedPromise(
+    (org: string, search: string) => async (options: { page: number }) => {
+      if (!org) return { data: [], hasMore: false };
+      const result = await getWorkspacesWithDetails(org, search || undefined, options.page);
+      return {
+        data: result.workspaces,
+        hasMore: result.hasNextPage,
+      };
+    },
+    [selectedOrg, searchText],
+    {
+      keepPreviousData: true,
+    },
+  );
+
+  // Merge basic and detailed data
+  const workspaces = useMemo(() => {
+    if (!workspacesBasic) return undefined;
+
+    // Create a map of detailed workspaces for quick lookup
+    const detailsMap = new Map<string, WorkspaceWithDetails>();
+    if (workspacesDetailed) {
+      for (const ws of workspacesDetailed) {
+        detailsMap.set(ws.id, ws);
+      }
+    }
+
+    // Return detailed data if available, otherwise basic data
+    return workspacesBasic.map((basic) => detailsMap.get(basic.id) || basic);
+  }, [workspacesBasic, workspacesDetailed]);
+
+  const workspacesError = basicError || detailsError;
+  const isLoadingWorkspaces = isLoadingBasic;
 
   if (orgsError || workspacesError) {
     const error = orgsError || workspacesError;
@@ -199,7 +242,6 @@ export default function SearchWorkspace() {
       }
     >
       {filteredWorkspaces?.map((workspace) => {
-        const latestRunStatus = workspace.latestRun?.attributes.status;
         const driftStatus = getDriftStatus(workspace);
 
         const getDriftAccessory = () => {
@@ -219,8 +261,17 @@ export default function SearchWorkspace() {
                 icon: { source: Icon.QuestionMarkCircle, tintColor: Color.SecondaryText },
                 tooltip: "Drift Detection Unavailable (requires Standard/Premium plan)",
               };
+            case "loading":
+              return {
+                icon: { source: Icon.CircleProgress, tintColor: Color.SecondaryText },
+                tooltip: "Loading drift status...",
+              };
           }
         };
+
+        // Check if we have detailed info for this workspace
+        const hasDetails = isWorkspaceWithDetails(workspace);
+        const latestRunStatus = hasDetails ? workspace.latestRun?.attributes.status : undefined;
 
         return (
           <List.Item
@@ -228,14 +279,20 @@ export default function SearchWorkspace() {
             title={workspace.attributes.name}
             subtitle={workspace.attributes.description || undefined}
             accessories={[
-              {
-                icon: {
-                  source: getRunStatusIcon(latestRunStatus),
-                  tintColor: getRunStatusColor(latestRunStatus),
-                },
-                text: getRunStatusLabel(latestRunStatus),
-                tooltip: "Latest Run Status",
-              },
+              hasDetails
+                ? {
+                    icon: {
+                      source: getRunStatusIcon(latestRunStatus),
+                      tintColor: getRunStatusColor(latestRunStatus),
+                    },
+                    text: getRunStatusLabel(latestRunStatus),
+                    tooltip: "Latest Run Status",
+                  }
+                : {
+                    icon: { source: Icon.CircleProgress, tintColor: Color.SecondaryText },
+                    text: "Loading...",
+                    tooltip: "Loading run status...",
+                  },
               {
                 text: formatDate(workspace.attributes["latest-change-at"]),
                 tooltip: "Last Changed",
@@ -294,21 +351,35 @@ export default function SearchWorkspace() {
                     <List.Item.Detail.Metadata.Separator />
                     <List.Item.Detail.Metadata.Label
                       title="Latest Run Status"
-                      text={getRunStatusLabel(latestRunStatus)}
-                      icon={{
-                        source: getRunStatusIcon(latestRunStatus),
-                        tintColor: getRunStatusColor(latestRunStatus),
-                      }}
+                      text={hasDetails ? getRunStatusLabel(latestRunStatus) : "Loading..."}
+                      icon={
+                        hasDetails
+                          ? {
+                              source: getRunStatusIcon(latestRunStatus),
+                              tintColor: getRunStatusColor(latestRunStatus),
+                            }
+                          : { source: Icon.CircleProgress, tintColor: Color.SecondaryText }
+                      }
                     />
                     <List.Item.Detail.Metadata.Label
                       title="Drift"
-                      text={driftStatus === "drifted" ? "Detected" : driftStatus === "no-drift" ? "No Drift" : "N/A"}
+                      text={
+                        driftStatus === "drifted"
+                          ? "Detected"
+                          : driftStatus === "no-drift"
+                            ? "No Drift"
+                            : driftStatus === "loading"
+                              ? "Loading..."
+                              : "N/A"
+                      }
                       icon={
                         driftStatus === "drifted"
                           ? { source: Icon.Warning, tintColor: Color.Orange }
                           : driftStatus === "no-drift"
                             ? { source: Icon.CheckCircle, tintColor: Color.Green }
-                            : { source: Icon.QuestionMarkCircle, tintColor: Color.SecondaryText }
+                            : driftStatus === "loading"
+                              ? { source: Icon.CircleProgress, tintColor: Color.SecondaryText }
+                              : { source: Icon.QuestionMarkCircle, tintColor: Color.SecondaryText }
                       }
                     />
                     <List.Item.Detail.Metadata.Separator />
