@@ -126,10 +126,13 @@ function getDriftStatus(workspace: WorkspaceWithDetails): DriftStatus {
   return assessment.attributes.drifted ? "drifted" : "no-drift";
 }
 
+type DriftFilter = "all" | "drifted";
+
 export default function SearchWorkspace() {
   const preferences = getPreferenceValues<Preferences>();
   const [searchText, setSearchText] = useState("");
   const [selectedOrg, setSelectedOrg] = useState<string>(preferences.organization || "");
+  const [driftFilter, setDriftFilter] = useState<DriftFilter>("all");
 
   const {
     data: organizations,
@@ -168,12 +171,19 @@ export default function SearchWorkspace() {
     setSelectedOrg(organizations[0].attributes.name);
   }
 
+  // Filter workspaces by drift status
+  const filteredWorkspaces = workspacesData?.workspaces.filter((workspace) => {
+    if (driftFilter === "all") return true;
+    return getDriftStatus(workspace) === "drifted";
+  });
+
   return (
     <List
       isLoading={isLoadingOrgs || isLoadingWorkspaces}
       searchBarPlaceholder="Search workspaces by name..."
       onSearchTextChange={setSearchText}
       throttle
+      navigationTitle={driftFilter === "drifted" ? "Drifted Workspaces" : undefined}
       searchBarAccessory={
         <List.Dropdown tooltip="Select Organization" value={selectedOrg} onChange={setSelectedOrg}>
           {organizations?.map((org) => (
@@ -182,7 +192,7 @@ export default function SearchWorkspace() {
         </List.Dropdown>
       }
     >
-      {workspacesData?.workspaces.map((workspace) => {
+      {filteredWorkspaces?.map((workspace) => {
         const latestRunStatus = workspace.latestRun?.attributes.status;
         const driftStatus = getDriftStatus(workspace);
 
@@ -246,6 +256,23 @@ export default function SearchWorkspace() {
                     icon={Icon.Link}
                     shortcut={{ modifiers: ["cmd", "shift"], key: "c" }}
                   />
+                </ActionPanel.Section>
+                <ActionPanel.Section title="Filter">
+                  {driftFilter === "all" ? (
+                    <Action
+                      title="Show Drifted Only"
+                      icon={Icon.Filter}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                      onAction={() => setDriftFilter("drifted")}
+                    />
+                  ) : (
+                    <Action
+                      title="Show All Workspaces"
+                      icon={Icon.List}
+                      shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                      onAction={() => setDriftFilter("all")}
+                    />
+                  )}
                 </ActionPanel.Section>
               </ActionPanel>
             }
@@ -340,15 +367,29 @@ export default function SearchWorkspace() {
           />
         );
       })}
-      {workspacesData?.workspaces.length === 0 && !isLoadingWorkspaces && (
+      {filteredWorkspaces?.length === 0 && !isLoadingWorkspaces && (
         <List.EmptyView
-          title="No Workspaces Found"
+          title={driftFilter === "drifted" ? "No Drifted Workspaces" : "No Workspaces Found"}
           description={
-            searchText
-              ? `No workspaces matching "${searchText}"`
-              : "No workspaces in this organization. Check your organization name in preferences."
+            driftFilter === "drifted"
+              ? "No workspaces with drift detected. Press Cmd+Shift+F to show all."
+              : searchText
+                ? `No workspaces matching "${searchText}"`
+                : "No workspaces in this organization. Check your organization name in preferences."
           }
-          icon={Icon.MagnifyingGlass}
+          icon={driftFilter === "drifted" ? Icon.CheckCircle : Icon.MagnifyingGlass}
+          actions={
+            driftFilter === "drifted" ? (
+              <ActionPanel>
+                <Action
+                  title="Show All Workspaces"
+                  icon={Icon.List}
+                  shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                  onAction={() => setDriftFilter("all")}
+                />
+              </ActionPanel>
+            ) : undefined
+          }
         />
       )}
     </List>
