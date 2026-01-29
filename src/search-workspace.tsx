@@ -143,13 +143,18 @@ export default function SearchWorkspace() {
   });
 
   const {
-    data: workspacesData,
+    data: workspaces,
     isLoading: isLoadingWorkspaces,
     error: workspacesError,
+    pagination,
   } = useCachedPromise(
-    async (org: string, search: string) => {
-      if (!org) return { workspaces: [], totalCount: 0, hasNextPage: false };
-      return await getWorkspaces(org, search || undefined);
+    (org: string, search: string) => async (options: { page: number }) => {
+      if (!org) return { data: [], hasMore: false };
+      const result = await getWorkspaces(org, search || undefined, options.page);
+      return {
+        data: result.workspaces,
+        hasMore: result.hasNextPage,
+      };
     },
     [selectedOrg, searchText],
     {
@@ -172,7 +177,7 @@ export default function SearchWorkspace() {
   }
 
   // Filter workspaces by drift status
-  const filteredWorkspaces = workspacesData?.workspaces.filter((workspace) => {
+  const filteredWorkspaces = workspaces?.filter((workspace) => {
     if (driftFilter === "all") return true;
     return getDriftStatus(workspace) === "drifted";
   });
@@ -183,6 +188,7 @@ export default function SearchWorkspace() {
       searchBarPlaceholder="Search workspaces by name..."
       onSearchTextChange={setSearchText}
       throttle
+      pagination={pagination}
       navigationTitle={driftFilter === "drifted" ? "Drifted Workspaces" : undefined}
       searchBarAccessory={
         <List.Dropdown tooltip="Select Organization" value={selectedOrg} onChange={setSelectedOrg}>

@@ -41,7 +41,7 @@ export async function getWorkspaces(
   organizationName: string,
   searchName?: string,
   pageNumber = 1,
-  pageSize = 20,
+  pageSize = 100,
 ): Promise<{
   workspaces: WorkspaceWithDetails[];
   totalCount: number;
