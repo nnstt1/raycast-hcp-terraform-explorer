@@ -42,12 +42,10 @@ export interface HcptRun {
  * hcpt drift list JSON output format (from Explorer API)
  */
 export interface HcptDriftResult {
-  workspace_id: string;
-  workspace_name: string;
+  workspace: string; // workspace name (not ID)
   drifted: boolean;
-  succeeded: boolean;
-  error_msg?: string | null;
-  created_at: string;
+  resources_drifted: number;
+  resources_undrifted: number;
 }
 
 /**
@@ -143,9 +141,10 @@ export function transformHcptWorkspacesWithDetailsToApi(
   return workspaces.map((ws, index) => {
     const hcptWs = hcptData[index];
 
-    // Create a Run object if latest run status is available
+    // Create a Run object if current run status is available
     let latestRun: Run | undefined;
-    if (hcptWs.latest_run_status) {
+    const runStatus = hcptWs.latest_run_status || hcptWs.current_run_status;
+    if (runStatus && runStatus !== "") {
       latestRun = {
         id: "",
         type: "runs",
@@ -155,7 +154,7 @@ export function transformHcptWorkspacesWithDetailsToApi(
           "is-destroy": false,
           message: "",
           source: "",
-          status: normalizeRunStatus(hcptWs.latest_run_status),
+          status: normalizeRunStatus(runStatus),
           "status-timestamps": {},
           "trigger-reason": "unknown",
         },
@@ -172,16 +171,16 @@ export function transformHcptWorkspacesWithDetailsToApi(
 
     // Create AssessmentResult if drift information is available
     let currentAssessmentResult: AssessmentResult | undefined;
-    const driftInfo = driftMap?.get(ws.id);
+    const driftInfo = driftMap?.get(hcptWs.name); // Use workspace name as key
     if (driftInfo) {
       currentAssessmentResult = {
         id: `drift-${ws.id}`,
         type: "assessment-results",
         attributes: {
           drifted: driftInfo.drifted,
-          succeeded: driftInfo.succeeded,
-          "error-msg": driftInfo.error_msg || null,
-          "created-at": driftInfo.created_at,
+          succeeded: true, // Assume success if we got drift data
+          "error-msg": null,
+          "created-at": hcptWs.updated_at, // Use workspace updated_at as fallback
         },
       };
     }

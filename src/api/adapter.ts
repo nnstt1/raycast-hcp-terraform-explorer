@@ -42,7 +42,6 @@ export function getProvider(): TerraformProvider {
   try {
     cachedProvider = new HcptProvider(hcptInfo.path);
     cachedProviderType = "hcpt";
-    console.log(`Using hcpt provider${hcptInfo.version ? ` (v${hcptInfo.version})` : ""}`);
 
     // Show a subtle toast notification (optional)
     showToast({
@@ -94,7 +93,7 @@ async function executeOperation<T>(
   try {
     return await operation(provider);
   } catch (error) {
-    console.error(`${operationName} failed:`, error);
+    console.error(`[adapter] ${operationName} failed:`, error);
     throw error;
   }
 }

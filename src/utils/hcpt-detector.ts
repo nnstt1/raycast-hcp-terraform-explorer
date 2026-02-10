@@ -19,7 +19,6 @@ export function detectHcpt(): HcptInfo {
     const preferences = getPreferenceValues<Preferences>();
     if (preferences.hcptPath) {
       const customPath = preferences.hcptPath.trim();
-      console.log("[hcpt-detector] Checking custom path from preferences:", customPath);
 
       if (existsSync(customPath)) {
         try {
@@ -29,18 +28,14 @@ export function detectHcpt(): HcptInfo {
             stdio: ["ignore", "pipe", "ignore"],
           }).trim();
 
-          console.log("[hcpt-detector] Found hcpt at custom path:", customPath, "version:", version);
           return { available: true, path: customPath, version };
-        } catch (error) {
-          console.log("[hcpt-detector] Custom path exists but version check failed:", error);
+        } catch {
           return { available: true, path: customPath };
         }
-      } else {
-        console.log("[hcpt-detector] Custom path does not exist:", customPath);
       }
     }
-  } catch (error) {
-    console.log("[hcpt-detector] Failed to get preferences:", error);
+  } catch {
+    // Failed to get preferences
   }
 
   // Common installation paths
@@ -50,8 +45,6 @@ export function detectHcpt(): HcptInfo {
     process.env.HOME + "/go/bin/hcpt",
     process.env.GOPATH ? process.env.GOPATH + "/bin/hcpt" : null,
   ].filter((path): path is string => path !== null);
-
-  console.log("[hcpt-detector] Checking paths:", possiblePaths);
 
   // Check each possible path
   for (const path of possiblePaths) {
@@ -73,7 +66,6 @@ export function detectHcpt(): HcptInfo {
 
   // Try searching in PATH environment variable directly
   const pathEnv = process.env.PATH || "";
-  console.log("[hcpt-detector] PATH environment:", pathEnv);
 
   if (pathEnv) {
     const pathDirs = pathEnv.split(":");
@@ -87,11 +79,9 @@ export function detectHcpt(): HcptInfo {
             stdio: ["ignore", "pipe", "ignore"],
           }).trim();
 
-          console.log("[hcpt-detector] Found hcpt in PATH at:", hcptPath, "version:", version);
           return { available: true, path: hcptPath, version };
         } catch {
           // Version command failed, but binary exists
-          console.log("[hcpt-detector] Found hcpt in PATH at:", hcptPath, "but version check failed");
           return { available: true, path: hcptPath };
         }
       }
@@ -106,8 +96,6 @@ export function detectHcpt(): HcptInfo {
       stdio: ["ignore", "pipe", "ignore"], // Suppress stderr
     }).trim();
 
-    console.log("[hcpt-detector] which hcpt returned:", path);
-
     if (path) {
       try {
         const version = execSync(`${path} --version`, {
@@ -116,21 +104,17 @@ export function detectHcpt(): HcptInfo {
           stdio: ["ignore", "pipe", "ignore"],
         }).trim();
 
-        console.log("[hcpt-detector] Found hcpt at:", path, "version:", version);
         return { available: true, path, version };
       } catch {
         // Version command failed, but binary was found
-        console.log("[hcpt-detector] Found hcpt at:", path, "but version check failed");
         return { available: true, path };
       }
     }
-  } catch (error) {
+  } catch {
     // 'which' command failed or hcpt not found in PATH
-    console.log("[hcpt-detector] which command failed:", error);
   }
 
   // hcpt not found
-  console.log("[hcpt-detector] hcpt not found");
   return { available: false };
 }
 

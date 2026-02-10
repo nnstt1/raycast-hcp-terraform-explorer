@@ -1,4 +1,7 @@
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 import { getPreferenceValues } from "@raycast/api";
 import { Preferences, Workspace, WorkspaceWithDetails, Run } from "../types";
 import {
@@ -44,6 +47,24 @@ export class HcptProvider implements TerraformProvider {
     }
   }
 
+  private async executeHcptAsync(command: string): Promise<string> {
+    try {
+      const { stdout, stderr } = await execAsync(`${this.hcptPath} ${command}`, {
+        encoding: "utf-8",
+        timeout: 30000,
+        env: this.getEnv(),
+      });
+      if (stderr) {
+        console.warn(`[hcpt] stderr: ${stderr}`);
+      }
+      return stdout;
+    } catch (error) {
+      const err = error as { stderr?: string; message?: string };
+      const stderrMessage = err.stderr || "";
+      throw new Error(`hcpt command failed: ${stderrMessage || err.message || "Unknown error"}`);
+    }
+  }
+
   async getWorkspacesBasic(
     organizationName: string,
     searchName?: string,
@@ -60,7 +81,7 @@ export class HcptProvider implements TerraformProvider {
       command += ` --search "${searchName}"`;
     }
 
-    const output = this.executeHcpt(command);
+    const output = await this.executeHcptAsync(command);
     const hcptData: HcptWorkspace[] = JSON.parse(output);
 
     // hcpt returns all results at once, so we need to implement pagination manually
@@ -87,31 +108,38 @@ export class HcptProvider implements TerraformProvider {
     totalCount: number;
     hasNextPage: boolean;
   }> {
-    // Get workspace list
+    // Execute workspace list and drift list in parallel
     let command = `workspace list --org ${organizationName} --json`;
-
     if (searchName) {
       command += ` --search "${searchName}"`;
     }
+    const driftCommand = `drift list --org ${organizationName} --all --json`;
 
-    const output = this.executeHcpt(command);
-    const hcptData: HcptWorkspace[] = JSON.parse(output);
+    const [workspaceResult, driftResult] = await Promise.allSettled([
+      this.executeHcptAsync(command),
+      this.executeHcptAsync(driftCommand),
+    ]);
 
-    // Get drift information using Explorer API (much faster than Assessment API)
+    // Process workspace list result
+    if (workspaceResult.status === "rejected") {
+      throw new Error(`workspace list failed: ${workspaceResult.reason}`);
+    }
+    const hcptData: HcptWorkspace[] = JSON.parse(workspaceResult.value);
+
+    // Process drift list result
     let driftMap: Map<string, HcptDriftResult> | undefined;
-    try {
-      const driftCommand = `drift list --org ${organizationName} --all --json`;
-      const driftOutput = this.executeHcpt(driftCommand);
-      const driftData: HcptDriftResult[] = JSON.parse(driftOutput);
-
-      // Create a map for quick lookup by workspace ID
-      driftMap = new Map();
-      for (const drift of driftData) {
-        driftMap.set(drift.workspace_id, drift);
+    if (driftResult.status === "fulfilled") {
+      try {
+        const driftData: HcptDriftResult[] = JSON.parse(driftResult.value);
+        driftMap = new Map();
+        for (const drift of driftData) {
+          driftMap.set(drift.workspace, drift);
+        }
+      } catch (error) {
+        console.warn("Failed to parse drift data:", error);
       }
-    } catch (error) {
-      // If drift list fails, continue without drift information
-      console.warn("Failed to fetch drift information:", error);
+    } else {
+      console.warn("Failed to fetch drift information:", driftResult.reason);
     }
 
     // Manual pagination
@@ -135,38 +163,48 @@ export class HcptProvider implements TerraformProvider {
       command += ` --search "${searchName}"`;
     }
 
-    const output = this.executeHcpt(command);
+    const output = await this.executeHcptAsync(command);
     const hcptData: HcptWorkspace[] = JSON.parse(output);
 
     return transformHcptWorkspacesToApi(hcptData);
   }
 
   async getAllWorkspacesWithDetails(organizationName: string, searchName?: string): Promise<WorkspaceWithDetails[]> {
-    // Get workspace list
+    // Execute workspace list and drift list in parallel for better performance
     let command = `workspace list --org ${organizationName} --json`;
-
     if (searchName) {
       command += ` --search "${searchName}"`;
     }
+    const driftCommand = `drift list --org ${organizationName} --all --json`;
 
-    const output = this.executeHcpt(command);
-    const hcptData: HcptWorkspace[] = JSON.parse(output);
+    // Execute both commands in parallel using async exec
+    const [workspaceResult, driftResult] = await Promise.allSettled([
+      this.executeHcptAsync(command),
+      this.executeHcptAsync(driftCommand),
+    ]);
 
-    // Get drift information using Explorer API (much faster than Assessment API)
+    // Process workspace list result
+    if (workspaceResult.status === "rejected") {
+      throw new Error(`workspace list failed: ${workspaceResult.reason}`);
+    }
+    const hcptData: HcptWorkspace[] = JSON.parse(workspaceResult.value);
+
+    // Process drift list result
     let driftMap: Map<string, HcptDriftResult> | undefined;
-    try {
-      const driftCommand = `drift list --org ${organizationName} --all --json`;
-      const driftOutput = this.executeHcpt(driftCommand);
-      const driftData: HcptDriftResult[] = JSON.parse(driftOutput);
+    if (driftResult.status === "fulfilled") {
+      try {
+        const driftData: HcptDriftResult[] = JSON.parse(driftResult.value);
 
-      // Create a map for quick lookup by workspace ID
-      driftMap = new Map();
-      for (const drift of driftData) {
-        driftMap.set(drift.workspace_id, drift);
+        // Create a map for quick lookup by workspace name
+        driftMap = new Map();
+        for (const drift of driftData) {
+          driftMap.set(drift.workspace, drift);
+        }
+      } catch (error) {
+        console.warn("[hcpt-provider] Failed to parse drift data:", error);
       }
-    } catch (error) {
-      // If drift list fails, continue without drift information
-      console.warn("Failed to fetch drift information:", error);
+    } else {
+      console.warn("[hcpt-provider] Failed to fetch drift information:", driftResult.reason);
     }
 
     return transformHcptWorkspacesWithDetailsToApi(hcptData, driftMap);
@@ -176,7 +214,7 @@ export class HcptProvider implements TerraformProvider {
     // Use workspace list with search to find a specific workspace
     const command = `workspace list --org ${organizationName} --search "${workspaceName}" --json`;
 
-    const output = this.executeHcpt(command);
+    const output = await this.executeHcptAsync(command);
     const hcptData: HcptWorkspace[] = JSON.parse(output);
 
     // Find exact match
