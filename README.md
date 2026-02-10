@@ -30,6 +30,55 @@ When you first run the extension, Raycast will prompt you to configure:
 |---------|-------------|----------|
 | API Token | Your HCP Terraform API token | Yes |
 | Default Organization | Pre-select an organization on launch | No |
+| Use hcpt CLI | Use hcpt CLI if available for improved performance | No (default: enabled) |
+| Enable Plan Trigger | Enable Terraform Plan trigger action (requires hcpt v1.1+) | No (default: disabled) |
+
+## Performance Optimization (Optional)
+
+For faster performance and additional features, you can optionally install the `hcpt` CLI tool:
+
+### Installation
+
+**Using Homebrew (macOS/Linux):**
+```bash
+brew install nnstt1/tap/hcpt
+```
+
+**Using Go:**
+```bash
+go install github.com/nnstt1/hcpt@latest
+```
+
+**Manual Download:**
+
+Download the latest release from [GitHub Releases](https://github.com/nnstt1/hcpt/releases)
+
+### Benefits of using hcpt
+
+- **Faster queries**: 2-3x faster workspace operations
+- **Reduced API usage**: Built-in caching reduces API rate limit consumption
+- **Future features**: Plan trigger, variables management, and improved drift detection (coming soon)
+
+The extension will automatically detect and use `hcpt` if available. You can disable this behavior in Preferences if needed.
+
+### Troubleshooting
+
+**If hcpt is installed but not detected:**
+1. Ensure hcpt is in your PATH: `which hcpt`
+2. Verify the installation: `hcpt version`
+3. Try restarting Raycast
+
+**If hcpt is not working:**
+- The extension will automatically fall back to direct API access
+- Check your API token is set correctly in Preferences
+- Check hcpt logs: `hcpt workspace list --org <your-org> --json`
+- Disable "Use hcpt CLI" in Preferences to force using direct API access
+
+**Common PATH locations checked:**
+- `/usr/local/bin/hcpt` (Homebrew Intel Mac)
+- `/opt/homebrew/bin/hcpt` (Homebrew Apple Silicon Mac)
+- `~/go/bin/hcpt` (Go install)
+- Any location in your `$PATH`
 
 ## Commands
 

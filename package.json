@@ -33,6 +33,24 @@
       "description": "Default HCP Terraform organization name (optional)",
       "type": "textfield",
       "required": false
+    },
+    {
+      "name": "preferHcpt",
+      "title": "Use hcpt CLI",
+      "label": "Use hcpt CLI if available for improved performance",
+      "description": "Automatically detect and use hcpt CLI tool. Falls back to direct API access if unavailable.",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
+    {
+      "name": "enablePlanTrigger",
+      "title": "Enable Plan Trigger (Experimental)",
+      "label": "Enable Terraform Plan trigger action",
+      "description": "Requires hcpt v1.1+ (not yet released). Experimental feature.",
+      "type": "checkbox",
+      "required": false,
+      "default": false
     }
   ],
   "dependencies": {

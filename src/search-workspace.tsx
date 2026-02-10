@@ -1,7 +1,8 @@
 import { Action, ActionPanel, Color, getPreferenceValues, Icon, List, showToast, Toast } from "@raycast/api";
 import { useCachedPromise } from "@raycast/utils";
 import { useMemo, useState } from "react";
-import { getOrganizations, getWorkspacesBasic, getWorkspacesWithDetails, getWorkspaceUrl } from "./api";
+import { getOrganizations, getWorkspaceUrl } from "./api";
+import { getAllWorkspacesBasic, getAllWorkspacesWithDetails } from "./api/adapter";
 import { Preferences, Workspace, WorkspaceWithDetails, RunStatus } from "./types";
 
 function getRunStatusColor(status?: RunStatus): Color {
@@ -154,15 +155,10 @@ export default function SearchWorkspace() {
     data: workspacesBasic,
     isLoading: isLoadingBasic,
     error: basicError,
-    pagination,
   } = useCachedPromise(
-    (org: string, search: string) => async (options: { page: number }) => {
-      if (!org) return { data: [], hasMore: false };
-      const result = await getWorkspacesBasic(org, search || undefined, options.page);
-      return {
-        data: result.workspaces,
-        hasMore: result.hasNextPage,
-      };
+    async (org: string, search: string) => {
+      if (!org) return [];
+      return await getAllWorkspacesBasic(org, search || undefined);
     },
     [selectedOrg, searchText],
     {
@@ -172,13 +168,9 @@ export default function SearchWorkspace() {
 
   // Second fetch: Detailed workspace info (slower, includes run status and drift)
   const { data: workspacesDetailed, error: detailsError } = useCachedPromise(
-    (org: string, search: string) => async (options: { page: number }) => {
-      if (!org) return { data: [], hasMore: false };
-      const result = await getWorkspacesWithDetails(org, search || undefined, options.page);
-      return {
-        data: result.workspaces,
-        hasMore: result.hasNextPage,
-      };
+    async (org: string, search: string) => {
+      if (!org) return [];
+      return await getAllWorkspacesWithDetails(org, search || undefined);
     },
     [selectedOrg, searchText],
     {
@@ -231,7 +223,6 @@ export default function SearchWorkspace() {
       searchBarPlaceholder="Search workspaces by name..."
       onSearchTextChange={setSearchText}
       throttle
-      pagination={pagination}
       navigationTitle={driftFilter === "drifted" ? "Drifted Workspaces" : undefined}
       searchBarAccessory={
         <List.Dropdown tooltip="Select Organization" value={selectedOrg} onChange={setSelectedOrg}>

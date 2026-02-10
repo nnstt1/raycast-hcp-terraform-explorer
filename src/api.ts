@@ -1,15 +1,11 @@
 import { getPreferenceValues } from "@raycast/api";
-import {
-  Preferences,
-  TerraformApiResponse,
-  Organization,
-  Workspace,
-  WorkspaceWithDetails,
-  Run,
-  AssessmentResult,
-} from "./types";
+import { Preferences, TerraformApiResponse, Organization, Workspace, WorkspaceWithDetails, Run } from "./types";
+import { FetchProvider } from "./api/fetch-provider";
 
 const API_BASE_URL = "https://app.terraform.io/api/v2";
+
+// Create a singleton instance of FetchProvider for backward compatibility
+const fetchProvider = new FetchProvider();
 
 function getHeaders(): HeadersInit {
   const preferences = getPreferenceValues<Preferences>();
@@ -37,7 +33,7 @@ export async function getOrganizations(): Promise<Organization[]> {
   return response.data;
 }
 
-// Get workspaces without details (fast, for initial display)
+// Delegate to FetchProvider for workspace-related operations
 export async function getWorkspacesBasic(
   organizationName: string,
   searchName?: string,
@@ -48,22 +44,9 @@ export async function getWorkspacesBasic(
   totalCount: number;
   hasNextPage: boolean;
 }> {
-  let endpoint = `/organizations/${organizationName}/workspaces?page[number]=${pageNumber}&page[size]=${pageSize}`;
-
-  if (searchName) {
-    endpoint += `&search[name]=${encodeURIComponent(searchName)}`;
-  }
-
-  const response = await fetchApi<TerraformApiResponse<Workspace[]>>(endpoint);
-
-  return {
-    workspaces: response.data,
-    totalCount: response.meta?.pagination?.["total-count"] ?? response.data.length,
-    hasNextPage: response.meta?.pagination?.["next-page"] !== null,
-  };
+  return fetchProvider.getWorkspacesBasic(organizationName, searchName, pageNumber, pageSize);
 }
 
-// Get workspaces with details (slower, includes run status and drift info)
 export async function getWorkspacesWithDetails(
   organizationName: string,
   searchName?: string,
@@ -74,54 +57,22 @@ export async function getWorkspacesWithDetails(
   totalCount: number;
   hasNextPage: boolean;
 }> {
-  let endpoint = `/organizations/${organizationName}/workspaces?page[number]=${pageNumber}&page[size]=${pageSize}&include=latest-run,current-assessment-result`;
+  return fetchProvider.getWorkspacesWithDetails(organizationName, searchName, pageNumber, pageSize);
+}
 
-  if (searchName) {
-    endpoint += `&search[name]=${encodeURIComponent(searchName)}`;
-  }
+export async function getAllWorkspacesBasic(organizationName: string, searchName?: string): Promise<Workspace[]> {
+  return fetchProvider.getAllWorkspacesBasic(organizationName, searchName);
+}
 
-  const response = await fetchApi<TerraformApiResponse<Workspace[], Run | AssessmentResult>>(endpoint);
-
-  // Map included items by ID for quick lookup
-  const runsById = new Map<string, Run>();
-  const assessmentsById = new Map<string, AssessmentResult>();
-  if (response.included) {
-    for (const item of response.included) {
-      if (item.type === "runs") {
-        runsById.set(item.id, item as Run);
-      } else if (item.type === "assessment-results") {
-        assessmentsById.set(item.id, item as AssessmentResult);
-      }
-    }
-  }
-
-  // Attach latest run and assessment result to each workspace
-  const workspacesWithDetails: WorkspaceWithDetails[] = response.data.map((workspace) => {
-    const latestRunRef = workspace.relationships["latest-run"]?.data;
-    const latestRun = latestRunRef ? runsById.get(latestRunRef.id) : undefined;
-
-    const assessmentRef = workspace.relationships["current-assessment-result"]?.data;
-    const currentAssessmentResult = assessmentRef ? assessmentsById.get(assessmentRef.id) : undefined;
-
-    return {
-      ...workspace,
-      latestRun,
-      currentAssessmentResult,
-    };
-  });
-
-  return {
-    workspaces: workspacesWithDetails,
-    totalCount: response.meta?.pagination?.["total-count"] ?? response.data.length,
-    hasNextPage: response.meta?.pagination?.["next-page"] !== null,
-  };
+export async function getAllWorkspacesWithDetails(
+  organizationName: string,
+  searchName?: string,
+): Promise<WorkspaceWithDetails[]> {
+  return fetchProvider.getAllWorkspacesWithDetails(organizationName, searchName);
 }
 
 export async function getWorkspace(organizationName: string, workspaceName: string): Promise<Workspace> {
-  const response = await fetchApi<TerraformApiResponse<Workspace>>(
-    `/organizations/${organizationName}/workspaces/${workspaceName}`,
-  );
-  return response.data;
+  return fetchProvider.getWorkspace(organizationName, workspaceName);
 }
 
 export async function getRuns(
@@ -133,14 +84,7 @@ export async function getRuns(
   totalCount: number;
   hasNextPage: boolean;
 }> {
-  const endpoint = `/workspaces/${workspaceId}/runs?page[number]=${pageNumber}&page[size]=${pageSize}`;
-  const response = await fetchApi<TerraformApiResponse<Run[]>>(endpoint);
-
-  return {
-    runs: response.data,
-    totalCount: response.meta?.pagination?.["total-count"] ?? response.data.length,
-    hasNextPage: response.meta?.pagination?.["next-page"] !== null,
-  };
+  return fetchProvider.getRuns(workspaceId, pageNumber, pageSize);
 }
 
 export async function getRun(runId: string): Promise<Run> {

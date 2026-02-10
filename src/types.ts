@@ -3,6 +3,8 @@
 export interface Preferences {
   apiToken: string;
   organization?: string;
+  preferHcpt?: boolean;
+  enablePlanTrigger?: boolean;
 }
 
 export type RunStatus =
