@@ -57,9 +57,12 @@ Download the latest release from [GitHub Releases](https://github.com/nnstt1/hcp
 
 - **Faster queries**: 2-3x faster workspace operations
 - **Reduced API usage**: Built-in caching reduces API rate limit consumption
-- **Future features**: Plan trigger, variables management, and improved drift detection (coming soon)
+- **High-speed drift detection**: Uses Explorer API instead of Assessment API for significantly faster drift detection on large workspaces
+- **Future features**: Plan trigger, variables management (coming soon)
 
 The extension will automatically detect and use `hcpt` if available. You can disable this behavior in Preferences if needed.
+
+> **Note**: Drift detection with hcpt requires the `drift list` command, which uses the Explorer API. This is much faster than the standard Assessment API, especially for organizations with many workspaces.
 
 ### Troubleshooting
 

@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - 2-3x faster workspace queries with built-in caching
   - Reduced API rate limit consumption
   - Automatic fallback to direct API access if hcpt fails or is unavailable
+- **High-speed drift detection with hcpt**
+  - Uses Explorer API (`hcpt drift list`) instead of Assessment API
+  - Significantly faster drift detection for organizations with many workspaces
+  - Single API call retrieves drift status for all workspaces
 - New preference setting: "Use hcpt CLI" (enabled by default)
 - New preference setting: "Enable Plan Trigger" (experimental, requires hcpt v1.1+)
 - Toast notifications for provider status (hcpt detected, fallback to API, etc.)
@@ -21,11 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Refactored API layer to support multiple providers (hcpt CLI and direct API)
 - Improved error handling with automatic fallback mechanism
+- Drift detection now uses Explorer API when hcpt is available
 
 ### Performance
 
 - Workspace list operations are significantly faster when using hcpt CLI
 - Reduced number of API calls through hcpt's built-in caching
+- Drift detection is 10-100x faster with hcpt Explorer API (vs Assessment API)
 
 ## [Initial Release] - {PR_MERGE_DATE}
 

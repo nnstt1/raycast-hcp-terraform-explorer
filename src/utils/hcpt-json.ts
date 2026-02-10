@@ -1,4 +1,4 @@
-import { Workspace, WorkspaceWithDetails, Run, RunStatus } from "../types";
+import { Workspace, WorkspaceWithDetails, Run, RunStatus, AssessmentResult } from "../types";
 
 /**
  * hcpt CLI JSON output format (snake_case, flat structure)
@@ -36,6 +36,18 @@ export interface HcptRun {
   plan_resource_additions?: number;
   plan_resource_changes?: number;
   plan_resource_destructions?: number;
+}
+
+/**
+ * hcpt drift list JSON output format (from Explorer API)
+ */
+export interface HcptDriftResult {
+  workspace_id: string;
+  workspace_name: string;
+  drifted: boolean;
+  succeeded: boolean;
+  error_msg?: string | null;
+  created_at: string;
 }
 
 /**
@@ -119,8 +131,13 @@ export function transformHcptWorkspacesToApi(hcptData: HcptWorkspace[]): Workspa
 
 /**
  * Convert hcpt workspace JSON with details to HCP Terraform API format
+ * @param hcptData Workspace data from hcpt
+ * @param driftMap Optional map of workspace ID to drift information
  */
-export function transformHcptWorkspacesWithDetailsToApi(hcptData: HcptWorkspace[]): WorkspaceWithDetails[] {
+export function transformHcptWorkspacesWithDetailsToApi(
+  hcptData: HcptWorkspace[],
+  driftMap?: Map<string, HcptDriftResult>,
+): WorkspaceWithDetails[] {
   const workspaces = transformHcptWorkspacesToApi(hcptData);
 
   return workspaces.map((ws, index) => {
@@ -153,10 +170,26 @@ export function transformHcptWorkspacesWithDetailsToApi(hcptData: HcptWorkspace[
       };
     }
 
+    // Create AssessmentResult if drift information is available
+    let currentAssessmentResult: AssessmentResult | undefined;
+    const driftInfo = driftMap?.get(ws.id);
+    if (driftInfo) {
+      currentAssessmentResult = {
+        id: `drift-${ws.id}`,
+        type: "assessment-results",
+        attributes: {
+          drifted: driftInfo.drifted,
+          succeeded: driftInfo.succeeded,
+          "error-msg": driftInfo.error_msg || null,
+          "created-at": driftInfo.created_at,
+        },
+      };
+    }
+
     return {
       ...ws,
       latestRun,
-      currentAssessmentResult: undefined, // hcpt doesn't provide this yet
+      currentAssessmentResult,
     };
   });
 }
