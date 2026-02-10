@@ -30,12 +30,12 @@ When you first run the extension, Raycast will prompt you to configure:
 |---------|-------------|----------|
 | API Token | Your HCP Terraform API token | Yes |
 | Default Organization | Pre-select an organization on launch | No |
-| Use hcpt CLI | Use hcpt CLI if available for improved performance | No (default: enabled) |
+| hcpt CLI Path | Custom path to hcpt CLI binary (leave empty for automatic detection) | No |
 | Enable Plan Trigger | Enable Terraform Plan trigger action (requires hcpt v1.1+) | No (default: disabled) |
 
-## Performance Optimization (Optional)
+## Requirements
 
-For faster performance and additional features, you can optionally install the `hcpt` CLI tool:
+This extension requires the `hcpt` CLI tool to be installed:
 
 ### Installation
 
@@ -53,29 +53,27 @@ go install github.com/nnstt1/hcpt@latest
 
 Download the latest release from [GitHub Releases](https://github.com/nnstt1/hcpt/releases)
 
-### Benefits of using hcpt
+### Features
 
 - **Faster queries**: 2-3x faster workspace operations
 - **Reduced API usage**: Built-in caching reduces API rate limit consumption
 - **High-speed drift detection**: Uses Explorer API instead of Assessment API for significantly faster drift detection on large workspaces
 - **Future features**: Plan trigger, variables management (coming soon)
 
-The extension will automatically detect and use `hcpt` if available. You can disable this behavior in Preferences if needed.
-
 > **Note**: Drift detection with hcpt requires the `drift list` command, which uses the Explorer API. This is much faster than the standard Assessment API, especially for organizations with many workspaces.
 
 ### Troubleshooting
 
 **If hcpt is installed but not detected:**
-1. Ensure hcpt is in your PATH: `which hcpt`
-2. Verify the installation: `hcpt version`
-3. Try restarting Raycast
+1. Find the hcpt path: `which hcpt`
+2. Set the path in Raycast Preferences → Extensions → HCP Terraform → "hcpt CLI Path"
+3. Example: `/Users/your-username/Workspace/go/bin/hcpt`
+4. Try restarting Raycast
 
 **If hcpt is not working:**
-- The extension will automatically fall back to direct API access
 - Check your API token is set correctly in Preferences
 - Check hcpt logs: `hcpt workspace list --org <your-org> --json`
-- Disable "Use hcpt CLI" in Preferences to force using direct API access
+- Verify hcpt can access the HCP Terraform API: `hcpt workspace list --org <your-org>`
 
 **Common PATH locations checked:**
 - `/usr/local/bin/hcpt` (Homebrew Intel Mac)

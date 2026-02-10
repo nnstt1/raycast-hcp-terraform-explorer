@@ -35,13 +35,12 @@
       "required": false
     },
     {
-      "name": "preferHcpt",
-      "title": "Use hcpt CLI",
-      "label": "Use hcpt CLI if available for improved performance",
-      "description": "Automatically detect and use hcpt CLI tool. Falls back to direct API access if unavailable.",
-      "type": "checkbox",
+      "name": "hcptPath",
+      "title": "hcpt CLI Path",
+      "description": "Custom path to hcpt CLI binary. Leave empty for automatic detection.",
+      "type": "textfield",
       "required": false,
-      "default": true
+      "placeholder": "/Users/your-username/go/bin/hcpt"
     },
     {
       "name": "enablePlanTrigger",

@@ -3,7 +3,7 @@
 export interface Preferences {
   apiToken: string;
   organization?: string;
-  preferHcpt?: boolean;
+  hcptPath?: string;
   enablePlanTrigger?: boolean;
 }
 
